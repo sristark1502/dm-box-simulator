@@ -948,18 +948,37 @@
   diverterSettle('odd');
   updateDiverterReadout();
 
+  const TAP_MIN = 1;
+  const TAP_MAX = 17;
+
   function setButtonsDisabled(disabled){
     raiseBtn.disabled = disabled;
     lowerBtn.disabled = disabled;
     resetBtn.disabled = disabled;
   }
 
+  function idleHintText(){
+    if (state.tap >= TAP_MAX) return 'Maximum tap (' + TAP_MAX + ') reached — LOWER only.';
+    if (state.tap <= TAP_MIN) return 'Minimum tap (' + TAP_MIN + ') reached — RAISE only.';
+    return 'Press RAISE or LOWER to run the motor. One tap step takes ' + (RUN_MS / 1000) + 's.';
+  }
+
+  function applyLimits(){
+    raiseBtn.disabled = state.tap >= TAP_MAX;
+    lowerBtn.disabled = state.tap <= TAP_MIN;
+    resetBtn.disabled = false;
+    hint.textContent = idleHintText();
+  }
+
   function operate(direction){
     if (state.running) return;
+    const isRaise = direction === 'raise';
+    if (isRaise && state.tap >= TAP_MAX) return;
+    if (!isRaise && state.tap <= TAP_MIN) return;
+
     state.running = true;
     setButtonsDisabled(true);
 
-    const isRaise = direction === 'raise';
     const dirClass = isRaise ? 'raise' : 'lower';
     const RUN = RUN_MS;
 
@@ -1025,10 +1044,8 @@
       timeMarker.style.transition = 'none';
       timeMarker.style.left = '0%';
 
-      hint.textContent = 'Press RAISE or LOWER to run the motor. One tap step takes ' + (RUN / 1000) + 's.';
-
       state.running = false;
-      setButtonsDisabled(false);
+      applyLimits();
     }, RUN);
   }
 
@@ -1065,6 +1082,8 @@
     timeMarker.style.transition = 'none';
     timeMarker.style.left = '0%';
 
-    hint.textContent = 'Press RAISE or LOWER to run the motor. One tap step takes ' + (RUN_MS / 1000) + 's.';
+    applyLimits();
   });
+
+  applyLimits();
 </script>
