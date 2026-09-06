@@ -1,0 +1,931 @@
+<title>DM Box Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-1:#0e1013;
+    --bg-2:#161a1f;
+    --panel:#1d2228;
+    --panel-2:#232a31;
+    --panel-border:#3a444e;
+    --inset:#12151a;
+    --inset-border:#2b333b;
+    --text:#e7ecf1;
+    --text-dim:#8994a1;
+    --text-faint:#525c66;
+    --led:#ffb64c;
+    --led-glow:rgba(255,182,76,.5);
+    --raise:#39b57d;
+    --raise-glow:rgba(57,181,125,.55);
+    --lower:#e2793f;
+    --lower-glow:rgba(226,121,63,.55);
+    --idle-ring:#4b5560;
+    --focus:#6fb7ff;
+    --screw:#0a0c0e;
+    --gloss:rgba(255,255,255,.08);
+    --gloss-strong:rgba(255,255,255,.16);
+    --bevel-dark:rgba(0,0,0,.55);
+  }
+
+  *{ box-sizing:border-box; }
+
+  body{
+    margin:0;
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:40px 20px;
+    background:
+      radial-gradient(1200px 700px at 50% -10%, var(--bg-2), var(--bg-1) 70%);
+    font-family:'Oswald', 'Arial Narrow', sans-serif;
+    color:var(--text);
+  }
+
+  .panel{
+    position:relative;
+    width:min(420px, 100%);
+    background:
+      linear-gradient(155deg, rgba(255,255,255,.05), transparent 22%),
+      linear-gradient(180deg, var(--panel), var(--panel-2));
+    border:1px solid var(--panel-border);
+    border-radius:14px;
+    padding:26px 26px 30px;
+    box-shadow:
+      0 40px 70px -24px rgba(0,0,0,.7),
+      0 2px 0 rgba(255,255,255,.04) inset,
+      0 -18px 30px -20px rgba(0,0,0,.5) inset;
+  }
+
+  .screw{
+    position:absolute;
+    width:9px; height:9px;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #6b7580, var(--screw) 70%);
+    box-shadow:0 1px 2px rgba(0,0,0,.6);
+  }
+  .screw.tl{ top:12px; left:12px; }
+  .screw.tr{ top:12px; right:12px; }
+  .screw.bl{ bottom:12px; left:12px; }
+  .screw.br{ bottom:12px; right:12px; }
+
+  .panel-head{
+    text-align:center;
+    margin-bottom:20px;
+  }
+  .panel-head h1{
+    margin:0;
+    font-size:26px;
+    font-weight:700;
+    letter-spacing:.12em;
+    color:var(--text);
+    text-wrap:balance;
+  }
+  .panel-head .subtitle{
+    margin-top:4px;
+    font-size:11px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--text-faint);
+  }
+
+  .readout-row{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin-bottom:22px;
+  }
+
+  .display-box{
+    position:relative;
+    background:var(--inset);
+    border:1px solid var(--inset-border);
+    border-radius:8px;
+    padding:10px 14px;
+    box-shadow:inset 0 3px 8px rgba(0,0,0,.65), inset 0 -1px 0 rgba(255,255,255,.03);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:4px;
+    overflow:hidden;
+  }
+  .display-box::after{
+    content:'';
+    position:absolute;
+    inset:0;
+    background:linear-gradient(160deg, rgba(255,255,255,.06) 0%, transparent 30%);
+    pointer-events:none;
+  }
+
+  .display-box .field-label{
+    font-size:10px;
+    letter-spacing:.16em;
+    color:var(--text-faint);
+    text-transform:uppercase;
+  }
+
+  .tap-value{
+    font-family:'Share Tech Mono', monospace;
+    font-size:34px;
+    line-height:1;
+    color:var(--led);
+    text-shadow:0 0 12px var(--led-glow);
+    font-variant-numeric:tabular-nums;
+  }
+
+  .status-row{
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+
+  .status-dot{
+    width:8px; height:8px;
+    border-radius:50%;
+    background:var(--idle-ring);
+    transition:background .2s, box-shadow .2s;
+  }
+  .status-dot.raise{ background:var(--raise); box-shadow:0 0 8px var(--raise-glow); }
+  .status-dot.lower{ background:var(--lower); box-shadow:0 0 8px var(--lower-glow); }
+
+  .status-value{
+    font-family:'Share Tech Mono', monospace;
+    font-size:14px;
+    letter-spacing:.06em;
+    color:var(--text-dim);
+  }
+  .status-value.raise{ color:var(--raise); }
+  .status-value.lower{ color:var(--lower); }
+
+  .motor-wrap{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:14px;
+    padding:20px 0 22px;
+  }
+
+  .motor{
+    position:relative;
+    width:130px; height:130px;
+    border-radius:50%;
+    background:
+      radial-gradient(circle at 32% 26%, #454f59, #262d34 46%, #14171b 82%);
+    border:3px solid var(--idle-ring);
+    box-shadow:
+      inset 0 4px 10px rgba(0,0,0,.6),
+      inset 0 -6px 14px rgba(0,0,0,.45),
+      0 8px 18px rgba(0,0,0,.5),
+      0 1px 0 var(--gloss-strong);
+    transition:border-color .25s, box-shadow .25s;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .motor::before{
+    content:'';
+    position:absolute;
+    top:8%; left:16%;
+    width:46%; height:26%;
+    border-radius:50%;
+    background:radial-gradient(closest-side, var(--gloss-strong), transparent);
+    filter:blur(1px);
+    pointer-events:none;
+  }
+  .motor.running[data-dir="raise"]{
+    border-color:var(--raise);
+    box-shadow:
+      inset 0 4px 10px rgba(0,0,0,.6),
+      inset 0 -6px 14px rgba(0,0,0,.45),
+      0 0 26px var(--raise-glow);
+  }
+  .motor.running[data-dir="lower"]{
+    border-color:var(--lower);
+    box-shadow:
+      inset 0 4px 10px rgba(0,0,0,.6),
+      inset 0 -6px 14px rgba(0,0,0,.45),
+      0 0 26px var(--lower-glow);
+  }
+
+  .motor-label{
+    font-family:'Share Tech Mono', monospace;
+    font-size:22px;
+    color:var(--text-dim);
+    text-shadow:0 1px 0 rgba(0,0,0,.6);
+    z-index:2;
+  }
+
+  .motor-rotor{
+    position:absolute;
+    inset:0;
+    display:flex;
+    justify-content:center;
+    align-items:flex-start;
+    transform-origin:50% 50%;
+  }
+
+  .motor-needle{
+    width:4px;
+    height:42px;
+    margin-top:16px;
+    background:var(--idle-ring);
+    border-radius:3px;
+    box-shadow:1px 0 1px rgba(0,0,0,.4);
+    transition:background .2s;
+  }
+  .motor.running[data-dir="raise"] .motor-needle{ background:var(--raise); box-shadow:0 0 6px var(--raise-glow); }
+  .motor.running[data-dir="lower"] .motor-needle{ background:var(--lower); box-shadow:0 0 6px var(--lower-glow); }
+
+  @keyframes spinCW{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+  @keyframes spinCCW{ from{ transform:rotate(0deg); } to{ transform:rotate(-360deg); } }
+
+  .motor.spin-cw .motor-rotor{ animation:spinCW 1.3s linear infinite; }
+  .motor.spin-ccw .motor-rotor{ animation:spinCCW 1.3s linear infinite; }
+
+  @media (prefers-reduced-motion: reduce){
+    .motor.spin-cw .motor-rotor,
+    .motor.spin-ccw .motor-rotor{
+      animation:none;
+      opacity:.55;
+    }
+  }
+
+  .progress-track{
+    width:100%;
+    height:6px;
+    border-radius:4px;
+    background:var(--inset);
+    border:1px solid var(--inset-border);
+    overflow:hidden;
+  }
+  .progress-fill{
+    height:100%;
+    width:0%;
+    background:var(--idle-ring);
+  }
+  .progress-fill.raise{ background:var(--raise); box-shadow:0 0 8px var(--raise-glow); }
+  .progress-fill.lower{ background:var(--lower); box-shadow:0 0 8px var(--lower-glow); }
+
+  .controls{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+  }
+
+  .ctrl-btn{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:4px;
+    padding:14px 10px 12px;
+    border-radius:10px;
+    border:1px solid var(--panel-border);
+    border-top-color:rgba(255,255,255,.14);
+    background:linear-gradient(180deg, #2c333b, #1b2025 55%, #171b20);
+    color:var(--text);
+    font-family:'Oswald', sans-serif;
+    font-size:13px;
+    font-weight:600;
+    letter-spacing:.1em;
+    cursor:pointer;
+    box-shadow:
+      0 4px 0 rgba(0,0,0,.55),
+      0 8px 14px rgba(0,0,0,.35),
+      inset 0 1px 0 var(--gloss-strong);
+    transition:transform .08s ease, box-shadow .08s ease, border-color .2s, color .2s;
+  }
+  .ctrl-btn .arrow{ font-size:17px; line-height:1; }
+
+  .ctrl-btn.raise:hover:not(:disabled){ border-color:var(--raise); color:var(--raise); }
+  .ctrl-btn.lower:hover:not(:disabled){ border-color:var(--lower); color:var(--lower); }
+
+  .ctrl-btn:active:not(:disabled){
+    transform:translateY(3px);
+    box-shadow:
+      0 1px 0 rgba(0,0,0,.55),
+      0 2px 6px rgba(0,0,0,.35),
+      inset 0 1px 0 var(--gloss-strong);
+  }
+
+  .ctrl-btn:focus-visible{
+    outline:2px solid var(--focus);
+    outline-offset:2px;
+  }
+
+  .ctrl-btn:disabled{
+    cursor:not-allowed;
+    opacity:.45;
+  }
+
+  .reset-btn{
+    display:block;
+    margin:14px auto 0;
+    padding:7px 16px;
+    border-radius:20px;
+    border:1px dashed var(--panel-border);
+    background:transparent;
+    color:var(--text-faint);
+    font-family:'Oswald', sans-serif;
+    font-size:10.5px;
+    font-weight:600;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    cursor:pointer;
+    transition:border-color .2s, color .2s;
+  }
+  .reset-btn:hover:not(:disabled){
+    border-color:var(--focus);
+    color:var(--focus);
+  }
+  .reset-btn:focus-visible{
+    outline:2px solid var(--focus);
+    outline-offset:2px;
+  }
+  .reset-btn:disabled{
+    cursor:not-allowed;
+    opacity:.4;
+  }
+
+  .hint{
+    margin-top:16px;
+    text-align:center;
+    font-size:11.5px;
+    letter-spacing:.02em;
+    color:var(--text-faint);
+    min-height:28px;
+  }
+
+  .rig{
+    display:flex;
+    flex-wrap:wrap;
+    gap:22px;
+    justify-content:center;
+    align-items:flex-start;
+  }
+
+  .selector-stage{
+    position:relative;
+    width:230px;
+    height:230px;
+    margin:6px auto 4px;
+  }
+
+  .contact{
+    position:absolute;
+    top:50%; left:50%;
+    width:34px; height:34px;
+    margin:-17px;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 28%, #454f59, #262d34 55%, #14171b 90%);
+    border:2px solid var(--idle-ring);
+    box-shadow:inset 0 2px 4px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.4);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'Share Tech Mono', monospace;
+    font-size:13px;
+    color:var(--text-dim);
+    transform:rotate(calc(var(--i) * 36deg)) translate(0, -96px) rotate(calc(var(--i) * -36deg));
+    transition:border-color .3s, color .3s, box-shadow .3s;
+    z-index:2;
+  }
+  .contact.active{
+    border-color:var(--led);
+    color:var(--led);
+    box-shadow:inset 0 2px 4px rgba(0,0,0,.55), 0 0 12px var(--led-glow);
+  }
+  .contact.fixed{
+    border-color:var(--focus);
+    color:var(--focus);
+    box-shadow:inset 0 2px 4px rgba(0,0,0,.55), 0 0 8px rgba(111,183,255,.35);
+  }
+
+  .fixed-rod{
+    position:absolute;
+    top:50%; left:50%;
+    width:0; height:0;
+    z-index:1;
+  }
+  .fixed-rod::after{
+    content:'';
+    position:absolute;
+    top:-92px;
+    left:-3px;
+    width:6px;
+    height:92px;
+    border-radius:2px;
+    background:repeating-linear-gradient(135deg, var(--idle-ring) 0 3px, #262d34 3px 6px);
+    border-left:1px solid rgba(255,255,255,.1);
+    border-right:1px solid rgba(0,0,0,.5);
+    transform-origin:50% 100%;
+    transform:rotate(108deg);
+  }
+
+  .wiper-pivot{
+    position:absolute;
+    top:50%; left:50%;
+    width:0; height:0;
+    z-index:2;
+  }
+  .wiper-arm{
+    position:absolute;
+    top:-88px;
+    left:-2px;
+    width:4px;
+    height:88px;
+    border-radius:3px;
+    background:var(--led);
+    box-shadow:0 0 8px var(--led-glow);
+    transform-origin:50% 100%;
+    transform:rotate(72deg);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .wiper-arm{ transition:none !important; }
+  }
+
+  .hub-center{
+    position:absolute;
+    top:50%; left:50%;
+    width:22px; height:22px;
+    margin:-11px;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 28%, #454f59, #262d34 55%, #14171b 90%);
+    border:2px solid var(--idle-ring);
+    box-shadow:inset 0 2px 4px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.4);
+    z-index:3;
+  }
+
+  .selector-readout{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:2px;
+    margin-top:6px;
+  }
+  .selector-readout .field-label{
+    font-size:10px;
+    letter-spacing:.16em;
+    color:var(--text-faint);
+    text-transform:uppercase;
+  }
+  .selector-readout .tap-value{ font-size:26px; }
+
+  .diverter-svg{
+    display:block;
+    width:100%;
+    max-width:260px;
+    margin:4px auto 8px;
+  }
+  .diverter-svg .wire-group{
+    color:var(--idle-ring);
+    transition:color .25s, filter .25s;
+  }
+  .diverter-svg .wire-group line,
+  .diverter-svg .wire-group path{
+    stroke:currentColor;
+    stroke-width:4;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+    fill:none;
+  }
+  .diverter-svg .wire-group .resistor{
+    stroke:currentColor;
+    stroke-width:3;
+    fill:none;
+  }
+  .diverter-svg .wire-group.live{
+    color:var(--led);
+    filter:drop-shadow(0 0 4px var(--led-glow));
+  }
+  .diverter-svg .contact-dot{
+    fill:currentColor;
+  }
+  #armRotG{
+    transform-origin:0px 0px;
+    transition:transform .3s linear;
+  }
+  .diverter-svg .arm-line{
+    stroke:var(--led);
+    stroke-width:4;
+    stroke-linecap:round;
+    filter:drop-shadow(0 0 5px var(--led-glow));
+  }
+  .diverter-svg .head-arc{
+    stroke:var(--led);
+    stroke-width:4;
+    stroke-linecap:round;
+    fill:none;
+    filter:drop-shadow(0 0 5px var(--led-glow));
+  }
+  .diverter-svg .pivot-dot{
+    fill:var(--idle-ring);
+  }
+  .diverter-svg .tag{
+    fill:var(--text-faint);
+    font-family:'Share Tech Mono', monospace;
+    font-size:11px;
+  }
+  .diverter-svg .lead{
+    stroke:var(--text-faint);
+    stroke-width:1.5;
+  }
+  .diverter-svg .tag-blue{ fill:var(--focus); font-size:9px; letter-spacing:.05em; }
+  .diverter-svg .lead-blue{ stroke:var(--focus); }
+  .diverter-svg .tag-red{ fill:#e2637c; font-size:9px; letter-spacing:.03em; }
+  .diverter-svg .lead-red{ stroke:#e2637c; }
+  .diverter-svg .tag-green{ fill:#3fc79a; font-size:9px; letter-spacing:.03em; }
+  .diverter-svg .lead-green{ stroke:#3fc79a; }
+
+  .diverter-state{
+    font-family:'Share Tech Mono', monospace;
+    font-size:26px;
+    letter-spacing:.05em;
+    transition:color .25s;
+  }
+  .diverter-state.odd{ color:#e2637c; }
+  .diverter-state.even{ color:#3fc79a; }
+</style>
+
+<div class="rig">
+<div class="panel">
+  <span class="screw tl"></span>
+  <span class="screw tr"></span>
+  <span class="screw bl"></span>
+  <span class="screw br"></span>
+
+  <div class="panel-head">
+    <h1>DM BOX</h1>
+    <div class="subtitle">Drive Mechanism &mdash; Simulator</div>
+  </div>
+
+  <div class="readout-row">
+    <div class="display-box">
+      <span class="field-label">Tap No</span>
+      <span class="tap-value" id="tapValue">10</span>
+    </div>
+    <div class="display-box">
+      <span class="field-label">Status</span>
+      <div class="status-row">
+        <span class="status-dot" id="statusDot"></span>
+        <span class="status-value" id="statusValue">OFF</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="motor-wrap">
+    <div class="motor" id="motor">
+      <div class="motor-rotor" id="motorRotor">
+        <span class="motor-needle"></span>
+      </div>
+      <span class="motor-label">M</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-btn raise" id="raiseBtn">
+      <span class="arrow">&#9650;</span>
+      <span>RAISE</span>
+    </button>
+    <button class="ctrl-btn lower" id="lowerBtn">
+      <span class="arrow">&#9660;</span>
+      <span>LOWER</span>
+    </button>
+  </div>
+
+  <button class="reset-btn" id="resetBtn">Reset to Tap 10</button>
+
+  <div class="hint" id="hintText">Press RAISE or LOWER to run the motor. One tap step takes 10 seconds.</div>
+</div>
+
+<div class="panel selector-panel">
+  <span class="screw tl"></span>
+  <span class="screw tr"></span>
+  <span class="screw bl"></span>
+  <span class="screw br"></span>
+
+  <div class="panel-head">
+    <h1>SELECTOR</h1>
+    <div class="subtitle">Tap Selector Switch</div>
+  </div>
+
+  <div class="selector-stage">
+    <div class="contact" id="contact-7" style="--i:0"><span>7</span></div>
+    <div class="contact" id="contact-8" style="--i:1"><span>8</span></div>
+    <div class="contact active" id="contact-9" style="--i:2"><span>9</span></div>
+    <div class="contact fixed" id="contact-C" style="--i:3"><span>C</span></div>
+    <div class="contact" id="contact-1" style="--i:4"><span>1</span></div>
+    <div class="contact" id="contact-2" style="--i:5"><span>2</span></div>
+    <div class="contact" id="contact-3" style="--i:6"><span>3</span></div>
+    <div class="contact" id="contact-4" style="--i:7"><span>4</span></div>
+    <div class="contact" id="contact-5" style="--i:8"><span>5</span></div>
+    <div class="contact" id="contact-6" style="--i:9"><span>6</span></div>
+
+    <div class="fixed-rod"></div>
+
+    <div class="wiper-pivot">
+      <div class="wiper-arm" id="wiperArm"></div>
+    </div>
+
+    <div class="hub-center"></div>
+  </div>
+
+  <div class="selector-readout">
+    <span class="field-label">Active Contact</span>
+    <span class="tap-value" id="activeContact">9</span>
+  </div>
+
+  <div class="hint">O&ndash;C is a fixed bus &mdash; always made. The wiper from O steps to the next contact every tap.</div>
+</div>
+
+<div class="panel diverter-panel">
+  <span class="screw tl"></span>
+  <span class="screw tr"></span>
+  <span class="screw bl"></span>
+  <span class="screw br"></span>
+
+  <div class="panel-head">
+    <h1>DIVERTER</h1>
+    <div class="subtitle">Diverter Switch</div>
+  </div>
+
+  <svg viewBox="0 0 260 225" class="diverter-svg" aria-hidden="true">
+    <!-- odd (left) side -->
+    <g id="stubOdd" class="wire-group">
+      <line x1="98" y1="4" x2="98" y2="16"/>
+    </g>
+    <g id="mainOddGroup" class="wire-group">
+      <path d="M98,16 L20,16 L20,133 L48,133" fill="none"/>
+      <circle cx="48" cy="133" r="8" class="contact-dot"/>
+    </g>
+    <g id="resOddGroup" class="wire-group">
+      <line x1="98" y1="16" x2="98" y2="36"/>
+      <rect x="89" y="36" width="18" height="40" rx="9" class="resistor"/>
+      <line x1="98" y1="76" x2="98" y2="91"/>
+      <circle cx="98" cy="91" r="7" class="contact-dot"/>
+    </g>
+    <text x="8" y="80" class="tag">M</text>
+    <text x="68" y="56" class="tag">R</text>
+
+    <!-- even (right) side -->
+    <g id="stubEven" class="wire-group">
+      <line x1="162" y1="4" x2="162" y2="16"/>
+    </g>
+    <g id="mainEvenGroup" class="wire-group">
+      <path d="M162,16 L240,16 L240,133 L212,133" fill="none"/>
+      <circle cx="212" cy="133" r="8" class="contact-dot"/>
+    </g>
+    <g id="resEvenGroup" class="wire-group">
+      <line x1="162" y1="16" x2="162" y2="36"/>
+      <rect x="153" y="36" width="18" height="40" rx="9" class="resistor"/>
+      <line x1="162" y1="76" x2="162" y2="91"/>
+      <circle cx="162" cy="91" r="7" class="contact-dot"/>
+    </g>
+    <text x="246" y="80" class="tag">M</text>
+    <text x="180" y="56" class="tag">R</text>
+
+    <line x1="178" y1="48" x2="203" y2="36" class="lead lead-blue"/>
+    <text x="204" y="33" class="tag tag-blue">RESISTANCE</text>
+
+    <!-- moving contactor: a rigid arm pivoted at a fixed centre ball -->
+    <g transform="translate(130,180)">
+      <g id="armRotG" style="transform:rotate(-60deg)">
+        <line class="arm-line" x1="0" y1="0" x2="0" y2="-95"/>
+        <path class="head-arc" d="M-34,-84 Q0,-124 34,-84" fill="none"/>
+      </g>
+      <circle class="pivot-dot" cx="0" cy="0" r="5"/>
+    </g>
+
+    <line x1="35" y1="152" x2="46" y2="138" class="lead lead-red"/>
+    <text x="2" y="166" class="tag tag-red">ODD POSITION</text>
+    <line x1="225" y1="152" x2="214" y2="138" class="lead lead-green"/>
+    <text x="178" y="166" class="tag tag-green">EVEN POSITION</text>
+  </svg>
+
+  <div class="selector-readout">
+    <span class="field-label">Diverter State</span>
+    <span class="diverter-state odd" id="diverterStateEl">ODD</span>
+  </div>
+
+  <div class="hint">Resistors (R) bridge the tap for an instant during changeover, then the main contact (M) takes the full load &mdash; current is never broken.</div>
+</div>
+</div>
+
+<script>
+  const RUN_MS = 5300;
+  const WIPER_MS = 4500;
+  const DIVERTER_TIMELINE = [
+    { stage: 'A', at: 4500, dur: 0 },
+    { stage: 'B', at: 4650, dur: 150 },
+    { stage: 'C', at: 4800, dur: 40 },
+    { stage: 'D', at: 4850, dur: 150 },
+    { stage: 'E', at: 5000, dur: 300 }
+  ];
+
+  const state = { tap: 10, running: false };
+
+  const tapEl = document.getElementById('tapValue');
+  const statusEl = document.getElementById('statusValue');
+  const statusDot = document.getElementById('statusDot');
+  const motor = document.getElementById('motor');
+  const progressFill = document.getElementById('progressFill');
+  const raiseBtn = document.getElementById('raiseBtn');
+  const lowerBtn = document.getElementById('lowerBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const hint = document.getElementById('hintText');
+
+  const wiperArm = document.getElementById('wiperArm');
+  const activeContactEl = document.getElementById('activeContact');
+  let wiperIndex = 9;
+  let wiperAngle = 72;
+
+  function setActiveContact(n){
+    document.querySelectorAll('.contact').forEach(el => el.classList.remove('active'));
+    const el = document.getElementById('contact-' + n);
+    if (el) el.classList.add('active');
+    activeContactEl.textContent = n;
+  }
+
+  const diverterStateEl = document.getElementById('diverterStateEl');
+  let diverterState = 'odd';
+
+  function cap(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
+  function sideIds(side){
+    return {
+      stub: 'stub' + cap(side),
+      main: 'main' + cap(side) + 'Group',
+      res: 'res' + cap(side) + 'Group'
+    };
+  }
+  const DIVERTER_IDS = [].concat(
+    Object.values(sideIds('odd')),
+    Object.values(sideIds('even'))
+  );
+
+  const ANGLES = {
+    odd: { main: -60, res: -20 },
+    even: { main: 60, res: 20 }
+  };
+
+  const armRotG = document.getElementById('armRotG');
+
+  function rotateArm(angleDeg, durationMs){
+    armRotG.style.transition = durationMs > 0 ? ('transform ' + durationMs + 'ms linear') : 'none';
+    armRotG.style.transform = 'rotate(' + angleDeg + 'deg)';
+  }
+
+  function setDiverterLive(liveIds){
+    DIVERTER_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('live', liveIds.includes(id));
+    });
+  }
+
+  function diverterStage(stage, from, to, dur){
+    const f = sideIds(from), t = sideIds(to);
+    if (stage === 'A'){
+      setDiverterLive([f.stub, f.main]);
+      rotateArm(ANGLES[from].main, dur);
+    } else if (stage === 'B'){
+      setDiverterLive([f.stub, f.res]);
+      rotateArm(ANGLES[from].res, dur);
+    } else if (stage === 'C'){
+      // arm centres between both resistance balls — the enlarged head
+      // touches both at once, so both carry current together, not one by one
+      setDiverterLive([f.stub, f.res, t.stub, t.res]);
+      rotateArm(0, dur);
+    } else if (stage === 'D'){
+      setDiverterLive([t.stub, t.res]);
+      rotateArm(ANGLES[to].res, dur);
+    } else if (stage === 'E'){
+      setDiverterLive([t.stub, t.main]);
+      rotateArm(ANGLES[to].main, dur);
+    }
+  }
+
+  function diverterSettle(side){
+    const f = sideIds(side);
+    setDiverterLive([f.stub, f.main]);
+    rotateArm(ANGLES[side].main, 0);
+  }
+
+  function updateDiverterReadout(){
+    diverterStateEl.textContent = diverterState.toUpperCase();
+    diverterStateEl.className = 'diverter-state ' + diverterState;
+  }
+
+  diverterSettle('odd');
+  updateDiverterReadout();
+
+  function setButtonsDisabled(disabled){
+    raiseBtn.disabled = disabled;
+    lowerBtn.disabled = disabled;
+    resetBtn.disabled = disabled;
+  }
+
+  function operate(direction){
+    if (state.running) return;
+    state.running = true;
+    setButtonsDisabled(true);
+
+    const isRaise = direction === 'raise';
+    const dirClass = isRaise ? 'raise' : 'lower';
+    const RUN = RUN_MS;
+
+    const diverterFrom = diverterState;
+    const diverterTo = diverterFrom === 'odd' ? 'even' : 'odd';
+    DIVERTER_TIMELINE.forEach(step => {
+      setTimeout(() => diverterStage(step.stage, diverterFrom, diverterTo, step.dur), step.at);
+    });
+
+    motor.classList.remove('spin-cw', 'spin-ccw');
+    void motor.offsetWidth;
+    motor.classList.add(isRaise ? 'spin-cw' : 'spin-ccw', 'running');
+    motor.dataset.dir = dirClass;
+
+    statusEl.textContent = (isRaise ? 'RAISE' : 'LOWER') + ' • RUNNING';
+    statusEl.className = 'status-value ' + dirClass;
+    statusDot.className = 'status-dot ' + dirClass;
+
+    hint.textContent = 'Motor running — tap will step in ' + (RUN / 1000) + 's.';
+
+    if (isRaise) {
+      wiperAngle += (wiperIndex === 9) ? 72 : 36;
+    } else {
+      wiperAngle -= (wiperIndex === 1) ? 72 : 36;
+    }
+    wiperArm.style.transition = 'transform ' + WIPER_MS + 'ms linear';
+    wiperArm.style.transform = 'rotate(' + wiperAngle + 'deg)';
+    document.querySelectorAll('.contact').forEach(el => el.classList.remove('active'));
+
+    progressFill.style.transition = 'none';
+    progressFill.style.width = '0%';
+    progressFill.className = 'progress-fill ' + dirClass;
+    void progressFill.offsetWidth;
+    progressFill.style.transition = 'width ' + RUN + 'ms linear';
+    progressFill.style.width = '100%';
+
+    setTimeout(() => {
+      state.tap += isRaise ? 1 : -1;
+      tapEl.textContent = state.tap;
+
+      wiperIndex = isRaise ? (wiperIndex % 9) + 1 : (((wiperIndex - 2 + 9) % 9) + 1);
+      setActiveContact(wiperIndex);
+
+      diverterState = diverterTo;
+      updateDiverterReadout();
+
+      motor.classList.remove('spin-cw', 'spin-ccw', 'running');
+      motor.removeAttribute('data-dir');
+
+      statusEl.textContent = 'OFF';
+      statusEl.className = 'status-value';
+      statusDot.className = 'status-dot';
+
+      progressFill.style.transition = 'none';
+      progressFill.style.width = '0%';
+
+      hint.textContent = 'Press RAISE or LOWER to run the motor. One tap step takes ' + (RUN / 1000) + 's.';
+
+      state.running = false;
+      setButtonsDisabled(false);
+    }, RUN);
+  }
+
+  raiseBtn.addEventListener('click', () => operate('raise'));
+  lowerBtn.addEventListener('click', () => operate('lower'));
+
+  resetBtn.addEventListener('click', () => {
+    if (state.running) return;
+
+    state.tap = 10;
+    tapEl.textContent = state.tap;
+
+    wiperIndex = 9;
+    wiperAngle = 72;
+    wiperArm.style.transition = 'none';
+    wiperArm.style.transform = 'rotate(' + wiperAngle + 'deg)';
+    void wiperArm.offsetWidth;
+    setActiveContact(wiperIndex);
+
+    diverterState = 'odd';
+    diverterSettle('odd');
+    updateDiverterReadout();
+
+    motor.classList.remove('spin-cw', 'spin-ccw', 'running');
+    motor.removeAttribute('data-dir');
+
+    statusEl.textContent = 'OFF';
+    statusEl.className = 'status-value';
+    statusDot.className = 'status-dot';
+
+    progressFill.style.transition = 'none';
+    progressFill.style.width = '0%';
+
+    hint.textContent = 'Press RAISE or LOWER to run the motor. One tap step takes ' + (RUN_MS / 1000) + 's.';
+  });
+</script>
